@@ -1,0 +1,225 @@
+<?xml version="1.0"?>
+
+<robot name="arm">
+  
+  <!-- *************************************************** -->
+  <!-- ******************** Kinematics ******************* -->
+  <!-- *************************************************** -->
+  <!-- Note the 'origin' tag in the fixed joints defines the shift and
+       reorientation before the continuous joint rotates around the
+       axis.  For shift distances see below. -->
+
+  <link name="world"/>
+
+
+  <joint name="connect-world-motor0base" type="fixed">
+    <parent link="world"/>
+    <child  link="motor0base"/>
+    <origin xyz="0 0 0.00635" rpy="0 0 0"/>
+  </joint>
+
+  <link name="motor0base"/>
+
+  <joint name="Red/7" type="continuous">
+    <parent link="motor0base"/>
+    <child  link="motor0output"/>
+    <origin xyz="0 0 0.03105"/>
+    <axis   xyz="0 0 1"/>
+  </joint>
+
+  <link name="motor0output"> </link>
+
+
+  <joint name="connect-motor0output-motor1base" type="fixed">
+    <parent link="motor0output"/>
+    <child  link="motor1base"/>
+    <origin xyz="0.49848 -0.01447 0.00635" rpy="0 0 0"/>
+  </joint>
+
+  <link name="motor1base"/>
+
+  <joint name="Red/5" type="continuous">
+    <parent link="motor1base"/>
+    <child  link="motor1output"/>
+    <origin xyz="0 0 0.03105"/>
+    <axis   xyz="0 0 1"/>
+  </joint>
+
+  <link name="motor1output"> </link>
+
+
+  <joint name="connect-motor1output-motor2base" type="fixed">
+    <parent link="motor1output"/>
+    <child  link="motor2base"/>
+    <origin xyz="-0.01013 0.0341 0.03988" rpy="-1.57 0 0"/>
+  </joint>
+
+  <link name="motor2base"/>
+
+  <joint name="Red/6" type="continuous">
+    <parent link="motor2base"/>
+    <child  link="motor2output"/>
+    <origin xyz="0 0 0.04505"/>
+    <axis   xyz="0 0 1"/>
+  </joint>
+
+  <link name="motor2output"> </link>
+
+
+  <joint name="connect-motor2output-motor3base" type="fixed">
+    <parent link="motor2output"/>
+    <child  link="motor3base"/>
+    <origin xyz="0.49848 -0.01447 0" rpy="3.14 0 0"/>
+  </joint>
+
+  <link name="motor3base"/>
+
+  <joint name="Red/3" type="continuous">
+    <parent link="motor3base"/>
+    <child  link="motor3output"/>
+    <origin xyz="0 0 0.03105"/>
+    <axis   xyz="0 0 1"/>
+  </joint>
+
+  <link name="motor3output"> </link>
+
+  <joint name="connect-motor3output-tip" type="fixed">
+    <parent link="motor3output"/>
+    <child  link="tip"/>
+    <origin xyz="0 0 0.0225" rpy="0 0 0"/>
+  </joint>
+
+  <link name="tip"/>
+
+
+  <!-- ******************** Materials ******************** -->
+
+  <material name="white">    <color rgba="1.00 1.00 1.00 1"/>  </material>
+  <material name="gray">     <color rgba="0.60 0.60 0.60 1"/>  </material>
+  <material name="table">    <color rgba="0.85 0.77 0.77 1"/>  </material>
+
+  <material name="hebired">  <color rgba="0.82 0.06 0.06 1"/>  </material>
+
+  <material name="red">      <color rgba="1.00 0.00 0.00 1"/>  </material>
+  <material name="green">    <color rgba="0.00 1.00 0.00 1"/>  </material>
+  <material name="blue">     <color rgba="0.00 0.00 1.00 1"/>  </material>
+
+  <material name="cyan">     <color rgba="0.00 1.00 1.00 1"/>  </material>
+  <material name="magenta">  <color rgba="1.00 0.00 1.00 1"/>  </material>
+  <material name="yellow">   <color rgba="1.00 1.00 0.00 1"/>  </material>
+
+
+  <!-- ********************** Table ********************** -->
+
+  <joint name="connect-world-table" type="fixed">
+    <parent link="world"/>
+    <child  link="table"/>
+  </joint>
+
+  <link name="table">
+    <visual>
+      <origin xyz="0 0 -0.025" rpy="0 0 0"/>
+      <geometry>
+	<box size="0.5 0.5 0.05"/>
+      </geometry>
+      <material name="table"/>
+    </visual>
+  </link>
+
+
+  <!-- ********************** Motors ********************* -->
+
+  <joint name="attach-motor0" type="fixed">
+    <parent link="motor0base"/>
+    <child  link="motor0"/>
+  </joint>
+
+  <link name="motor0">
+    <visual>
+      <origin xyz="0.035 0.0365 0" rpy="0 0 3.14"/>
+      <geometry>
+        <mesh filename="package://hw5code/arm/X5.STL" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="hebired"/>
+    </visual>
+  </link>
+
+  <joint name="attach-motor1" type="fixed">
+    <parent link="motor1base"/>
+    <child  link="motor1"/>
+  </joint>
+
+  <link name="motor1">
+    <visual>
+      <origin xyz="0.035 0.0365 0" rpy="0 0 3.14"/>
+      <geometry>
+        <mesh filename="package://hw5code/arm/X5.STL" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="hebired"/>
+    </visual>
+  </link>
+
+  <joint name="attach-motor2" type="fixed">
+    <parent link="motor2base"/>
+    <child  link="motor2"/>
+  </joint>
+
+  <link name="motor2">
+    <visual>
+      <origin xyz="0.035 0.0365 0" rpy="0 0 3.14"/>
+      <geometry>
+        <mesh filename="package://hw5code/arm/X8.STL" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="hebired"/>
+    </visual>
+  </link>
+
+  <joint name="attach-motor3" type="fixed">
+    <parent link="motor3base"/>
+    <child  link="motor3"/>
+  </joint>
+
+  <link name="motor3">
+    <visual>
+      <origin xyz="0.035 0.0365 0" rpy="0 0 3.14"/>
+      <geometry>
+        <mesh filename="package://hw5code/arm/X5.STL" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="hebired"/>
+    </visual>
+  </link>
+
+  <!-- ********************** Links  ********************* -->
+
+  <joint name="connect-motor0output-link1part1" type="fixed">
+    <parent link="motor0output"/>
+    <child  link="link1part1"/>
+  </joint>
+
+  <link name="link1part1">
+    <visual>
+      <origin xyz="-0.035 0.025 0" rpy="1.57 0 0"/>
+      <geometry>
+        <mesh filename="package://hw5code/arm/arm1.STL" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="white"/>
+    </visual>
+  </link>
+
+
+  <joint name="connect-motor2output-link3part1" type="fixed">
+    <parent link="motor2output"/>
+    <child  link="link3part1"/>
+  </joint>
+
+  <link name="link3part1">
+    <visual>
+      <origin xyz="-0.035 0.025 0" rpy="1.57 0 0"/>
+      <geometry>
+        <mesh filename="package://hw5code/arm/arm1.STL" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="white"/>
+    </visual>
+  </link>
+
+</robot>
