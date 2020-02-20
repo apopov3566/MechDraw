@@ -1,0 +1,11 @@
+<launch>
+	<node name="hebi" pkg="hebiros" type="hebiros_node" />
+	<node name="robodef" pkg="hw3code" type="pydefinerobot.py" />
+	<node name="cam" pkg="usb_cam" type="usb_cam_node" />
+	<node name="detector" pkg="hw4code" type="pydetectobject.py">
+		<remap from="/usb_cam/image_raw" to="/cam/image_raw" />
+	</node>
+	<node name="driver" pkg="hw4code" type="pytrackobject.py">
+		<remap from="/face" to="/box/faces" />
+	</node>
+</launch>

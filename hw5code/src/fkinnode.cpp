@@ -1,0 +1,140 @@
+/*
+**   fkinnode.cpp
+**
+**   Compute the forward kinematics.
+**
+**   Subscribe: /joint_states      sensor_msgs/JointState
+**   Publish:   /tippoint          geometry_msgs/PointStamped
+**   Publish:   /tippose           geometry_msgs/PoseStamped
+*/
+#include "ros/ros.h"
+#include "geometry_msgs/PointStamped.h"
+#include "geometry_msgs/PoseStamped.h"
+#include "sensor_msgs/JointState.h"
+
+#include <Eigen/Core>
+#include <Eigen/Geometry>
+#include <math.h>
+#include <iostream>
+
+/*
+**   Global Variables.  Make the publishers available to the callback.
+*/
+ros::Publisher pointPublisher;
+ros::Publisher posePublisher;
+
+
+/*
+**   Abbreviations for Eigen matrix manipulation.
+*/
+#define vec(x,y,z)  (Eigen::Vector3d((x), (y), (z)))
+#define R1(q)       (Eigen::AngleAxisd((q), vec(0.0, 0.0, 1.0)))
+#define R2(q)       (Eigen::AngleAxisd((q), vec(0.0, 0.0, 1.0)))
+#define R3(q)       (Eigen::AngleAxisd((q), vec(0.0, 1.0, 1.0)))
+#define R4(q)       (Eigen::AngleAxisd((q), vec(0.0, 1.0, 1.0)))
+/*
+**   Jointstate Subscriber Callback
+*/
+void jointstateCallback(const sensor_msgs::JointState::ConstPtr& msgptr)
+{ 
+  // Define link lengths
+  double l1 = 0.5;
+  double l2 = 0.5;
+  double l2x = 0.49848;
+  double l2y = -0.01447;
+  double l3x = 0.48835;
+  double l3z = 0.15973;
+  double l4x = 0.98683;
+  double l4z = 0.19078;
+  double lx = 0.98683;
+  double ly = 0.00916;
+  double lz = 0.1605;
+
+  Eigen::Vector3d  x;		// Position w.r.t. world
+  Eigen::Matrix3d  R;		// Orientation w.r.t. world
+
+  // Define transformation matrices
+  Eigen::Matrix4d g_base;
+  Eigen::Matrix4d g_1;
+  Eigen::Matrix4d g_2;
+  Eigen::Matrix4d g_3;
+  Eigen::Matrix4d g_r;
+  Eigen::Matrix4d g_4;
+  g_base << 1, 0, 0, lx,
+            0, 1, 0, ly,
+            0, 0, 1, lz,
+            0, 0, 0, 1;
+  g_1 << cos(msgptr->position[0]), -sin(msgptr->position[0]), 0, 0,    
+         sin(msgptr->position[0]), cos(msgptr->position[0]), 0, 0,   
+         0, 0, 1, 0, 0, 0, 0, 1;             
+  g_2 << cos(msgptr->position[1]), -sin(msgptr->position[1]), 0, l2x*(1-cos(msgptr->position[1]))+l2y*sin(msgptr->position[1]), 
+    sin(msgptr->position[1]), cos(msgptr->position[1]), 0, -l2x*sin(msgptr->position[1])+l2y*(1-cos(msgptr->position[1])),  
+         0, 0, 1, 0, 0, 0, 0, 1;                    
+  g_3 << cos(msgptr->position[2]), 0, sin(msgptr->position[2]), l3x*(1-cos(msgptr->position[2]))-l3z*sin(msgptr->position[2]), 
+         0, 1, 0, 0,               
+    -sin(msgptr->position[2]), 0, cos(msgptr->position[2]), l3x*sin(msgptr->position[2])+l3z*(1-cos(msgptr->position[2])),  
+    0, 0, 0, 1;
+  g_4 << cos(-msgptr->position[3]), 0, sin(-msgptr->position[3]), l4x*(1-cos(-msgptr->position[3])) - l4z*sin(-msgptr->position[3]),      
+         0, 1, 0, 0,                 
+         -sin(-msgptr->position[3]), 0, cos(-msgptr->position[3]), l4x*sin(-msgptr->position[3]) + l4z*(1-cos(-msgptr->position[3])),                      
+          0, 0, 0, 1;  
+  // Obtain tip position/orientation from transformations
+  Eigen::Matrix4d g_out = g_1*g_2*g_3*g_4*g_base;
+  R = g_out.block<3,3>(0,0);
+  x = g_out.block<3,1>(0,3);
+
+  // Publish the tip point.  Note that we declare the point as given
+  // with respect to the world reference frame.
+  geometry_msgs::PointStamped  point_msg;
+  point_msg.header = msgptr->header;
+  point_msg.header.frame_id = "world";
+
+  point_msg.point.x = x(0);
+  point_msg.point.y = x(1);
+  point_msg.point.z = x(2);
+
+  pointPublisher.publish(point_msg);
+
+  // Publish the tip pose.  Note that we declare the pose as given
+  // with respect to the world reference frame.
+  geometry_msgs::PoseStamped  pose_msg;
+  pose_msg.header = msgptr->header;
+  pose_msg.header.frame_id = "world";
+
+  pose_msg.pose.position.x = x(0);
+  pose_msg.pose.position.y = x(1);
+  pose_msg.pose.position.z = x(2);
+
+  Eigen::Quaterniond  quat = Eigen::Quaterniond(R);
+  pose_msg.pose.orientation.x = quat.x();
+  pose_msg.pose.orientation.y = quat.y();
+  pose_msg.pose.orientation.z = quat.z();
+  pose_msg.pose.orientation.w = quat.w();
+
+  posePublisher.publish(pose_msg);
+}
+
+
+/*
+**   Main Code
+*/
+int main(int argc, char **argv)
+{
+  // Initialize the basic ROS node.
+  ros::init(argc, argv, "fkinnode");
+  ros::NodeHandle n;
+
+  // Create publishers to send the tip position/pose.
+  pointPublisher = n.advertise<geometry_msgs::PointStamped>("/tippoint", 10);
+  posePublisher  = n.advertise<geometry_msgs::PoseStamped>("/tippose", 10);
+
+  // Create a subscriber to listen to joint_states.
+  ros::Subscriber jointstateSubscriber
+    = n.subscribe("joint_states", 10, jointstateCallback);
+
+  // Spin until shutdown.
+  ROS_INFO("Fkin: Running...");
+  ros::spin();
+
+  return 0;
+}
