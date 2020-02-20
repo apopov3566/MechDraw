@@ -15,9 +15,8 @@ lty = 0.00916 - 0.095     # Need to Measure
 ltz = 0.19078
 
 
-# TODO: Add workspace check
 def ikin(tip):
-    x, y, z, phi = tip[0], tip[1], tip[2], tip[3]
+    x, y, z = tip[0], tip[1], tip[2]
     # Compute theta3 to get desired z                                    
     Lz = np.sqrt((l4x - l3x)**2 + (l4z - l3z)**2)
     theta_z_base = np.arctan2(l4z - l3z, l4x - l3x)
@@ -50,15 +49,12 @@ def ikin(tip):
     th_a = np.arctan2(Lb, La)
     theta1_a = th1_nom - th_a
     theta2_a = th2_nom - th_b + th_a
-
-    # Set gripper orientation
-    theta4 = phi - theta3
     
-    return (theta1_a, theta2_a, theta3, theta4)
+    return (theta1_a, theta2_a, theta3)
 
 
-def fkin_twist(joints):
-    th1, th2, th3, th4 = joints[0], joints[1], joints[2], joints[3]
+def fkin(joints):
+    th1, th2, th3, th4 = joints[0], joints[1], joints[2], -joints[2]
     g_base = np.array([[1, 0, 0, ltx], [0, 1, 0, lty], [0, 0, 1, ltz], [0, 0, 0, 1]])
     g_1 = np.array([[np.cos(th1), -np.sin(th1), 0, 0], [np.sin(th1), np.cos(th1), 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]) 
     g_2 = np.array([[np.cos(th2), -np.sin(th2), 0, l2x*(1 - np.cos(th2)) + l2y*np.sin(th2)], [np.sin(th2), np.cos(th2), 0, -l2x*np.sin(th2) + l2y*(1 - np.cos(th2))], [0, 0, 1, 0], [0, 0, 0, 1]])
@@ -67,8 +63,8 @@ def fkin_twist(joints):
     g_out = np.matmul(np.matmul(np.matmul(np.matmul(g_1, g_2), g_3), g_4), g_base)
     R = g_out[0:3, 0:3]
     x = g_out[0:3, 3]
-    phi, th = joints[2], joints[0] + joints[1]
-    return (x[0], x[1], x[2], phi, th)
+    phi, th = joints[2] + joints[3], joints[0] + joints[1]
+    return (x[0], x[1], x[2])# phi, th)
 
 def fkin_check(joints):
     th1, th2, th3, th4 = joints[0], joints[1], joints[2], joints[3]
@@ -79,7 +75,7 @@ def fkin_check(joints):
     y = ( l2x*np.sin(th1) + l2y*np.cos(th1) ) + ( (l3x - l2x)*np.sin(th1 + th2) + (l3y - l2y)*np.cos(th1 + th2) ) + Le*np.sin(th1 + th2) + (l4y - l3y)*np.cos(th1 + th2) + (lty - l4y)*np.cos(th1 + th2)
     return x, y
 
-def fkin(joints):
+def fkin_base(joints):
     th1, th2, th3, th4 = joints[0], joints[1], joints[2], joints[3]
 
     La = l2x
@@ -120,8 +116,7 @@ def motor_pos(joints):
     return x2, x3, x4
 
 
-# TODO: Get Jacobian
-def get_jacobian(joints):
+def get_jacobian_stationary(joints):
     x2, x3, x4 = motor_pos(joints)
     x1 = np.array([0, 0, 0])
     w1 = np.array([0, 0, 1])
@@ -131,22 +126,37 @@ def get_jacobian(joints):
     J = np.stack( [ np.concatenate([np.zeros(3), w1]), np.concatenate([-np.cross(w2, x2), w2]), np.concatenate([-np.cross(w3, x3), w3]), np.concatenate([-np.cross(w4, x4), w4]) ] , axis=1 )
     return J
 
+def get_jacobian(joints):
+    th1, th2, th3, th4 = joints[0], joints[1], joints[2], joints[3]
+    th_z_base = np.arctan2(l4z - l3z, l4x - l3x)
+    Le = np.sqrt((l4x-l3x)**2 + (l4z-l3z)**2)*np.cos(th3 - th_z_base)
+    xt1 = -l2x*np.sin(th1) - l2y*np.cos(th1) - (l3x - l2x)*np.sin(th1+th2) - (l3y - l2y)*np.cos(th1+th2) - Le*np.sin(th1+th2) - (l4y - l3y)*np.cos(th1+th2) - (lty - l4y)*np.cos(th1+th2)
+    xt2 = - (l3x - l2x)*np.sin(th1+th2) - (l3y - l2y)*np.cos(th1+th2) - Le*np.sin(th1+th2) - (l4y - l3y)*np.cos(th1+th2) - (lty - l4y)*np.cos(th1+th2)
+    xt3 = -np.sqrt((l4x-l3x)**2 + (l4z-l3z)**2)*np.sin(th3 - th_z_base)*np.cos(th1+th2)
+    yt1 = l2x*np.cos(th1) - l2y*np.sin(th1) + (l3x - l2x)*np.cos(th1+th2) - (l3y - l2y)*np.sin(th1+th2) + Le*np.cos(th1+th2) - (l4y - l3y)*np.sin(th1+th2) - (lty - l4y)*np.sin(th1+th2)
+    yt2 = (l3x - l2x)*np.cos(th1+th2) - (l3y - l2y)*np.sin(th1+th2) + Le*np.cos(th1+th2) - (l4y - l3y)*np.sin(th1+th2) - (lty - l4y)*np.sin(th1+th2)
+    yt3 = -np.sqrt((l4x-l3x)**2 + (l4z-l3z)**2)*np.sin(th3 - th_z_base)*np.sin(th1+th2)
+    zt3 = np.sqrt((l4x - l3x)**2 + (l4z - l3z)**2)*np.cos(th3 - th_z_base)
+
+    J = np.array( [ [xt1, xt2, xt3, 0.], [yt1, yt2, yt3, 0.], [0., 0., zt3, 0.] ] )
+    return J
+
+
 def get_iJacobian(joints):
     J_inv = np.linalg.pinv(get_jacobian(joints))
     return J_inv
 
 if __name__ == '__main__':
     joints = np.array([0.92, 0.472, 0.372, 0.0])
-    f = fkin_twist(joints)
+    f = fkin(joints)
     q = ikin(f)
-    J = get_jacobian(q)
-    J_inv = get_iJacobian(q)
-    f_test = fkin_twist(q)
-    f_check = fkin_check(q)
-    print(f_test)
-    print(f_check)
+    J = get_jacobian(joints)
+    J_inv = get_iJacobian(joints)
+    f_test = fkin(q)
     q_test = ikin(f_test)
-
+    print(f)
+    print(f_test)
+    
     q_out = ikin(np.array([0.6, 0.6, 0.4, 0.0]))
 
 
