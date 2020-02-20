@@ -26,10 +26,20 @@ from jointmove import JointMove
 from abortmove import AbortMove
 from grabmove import GrabMove
 
+def motors_linear_to_mangled(motors):
+    # Linear order is:  7, 5, 6, 3, 4
+    # Mangled order is: 3, 5, 4, 7, 6
+    return [motors[3], motors[1], motors[4], motors[0], motors[2]]
+
+def motors_mangled_to_linear(motors):
+    # Linear order is:  7, 5, 6, 3, 4
+    # Mangled order is: 3, 5, 4, 7, 6
+    return [motors[3], motors[1], motors[4], motors[0], motors[2]]
+
 class CmdQueue:
     def __init__(self, cmdpos, cmdvel=[0.0, 0.0, 0.0, 0.0, 0.0]):
         self.q = deque()
-        self.cmdpos = cmdpos
+        self.cmdpos = list(cmdpos)
         self.cmdvel = cmdvel
         self.setup_front = False  # The move at queue head was already setup.
         self.aborting = False
@@ -46,10 +56,6 @@ class CmdQueue:
                                which returns positions, velocites, and efforts
                                for the motors.
         '''
-
-        if not self.q:
-            # The queue is empty.
-            move.setup()
 
         # Append on the left becuase pop() pops from the right.
         self.q.appendleft(move)
@@ -85,7 +91,7 @@ class CmdQueue:
 
         # Check if there is a pending movement.
         if self.q:
-            movement = self.d[-1]
+            movement = self.q[-1]
 
             # Make sure this movement has been setup.
             if not self.setup_front:
@@ -93,6 +99,22 @@ class CmdQueue:
                 self.setup_front = True
 
             motor_cmds = movement.get_commands(time)
+
+            # Remember the returned commands for use next iterations.
+            if isinstance(movement, GrabMove):
+                self.cmdpos[4] = motor_cmds[0]
+                self.cmdvel[4] = motor_cmds[1]
+    
+            else:
+                self.cmdpos[0] = motor_cmds[0][0]
+                self.cmdpos[1] = motor_cmds[0][1]
+                self.cmdpos[2] = motor_cmds[0][2]
+                self.cmdpos[3] = motor_cmds[0][2]
+    
+                self.cmdvel[0] = motor_cmds[1][0]
+                self.cmdvel[1] = motor_cmds[1][1]
+                self.cmdvel[2] = motor_cmds[1][2]
+                self.cmdvel[3] = motor_cmds[1][2]
 
             # If the movement has finished and we are not aborting, we should
             # pop this movement, so we can perform the next one.
@@ -108,23 +130,6 @@ class CmdQueue:
                     self.setup_front = False
         else:
             motor_cmds = [self.cmdpos, [0.0] * 5, [0.0] * 5]
-
-        # Remember the returned commands for use next iterations.
-        if isinstance(movement, GripMove):
-            self.cmdpos[4] = motor_cmds[0]
-            self.cmdvel[4] = motor_cmds[1]
-
-        else:
-            self.cmdpos[0] = motor_cmds[0][0]
-            self.cmdpos[1] = motor_cmds[0][1]
-            self.cmdpos[2] = motor_cmds[0][2]
-            self.cmdpos[3] = motor_cmds[0][2]
-
-            self.cmdvel[0] = motor_cmds[1][0]
-            self.cmdvel[1] = motor_cmds[1][1]
-            self.cmdvel[2] = motor_cmds[1][2]
-            self.cmdvel[3] = motor_cmds[1][2]
-
 
         return [self.cmdpos, self.cmdvel, [0.0] * 5]
 
@@ -187,7 +192,8 @@ class Moveto:
         phi = data.position[3]
         grip = data.position[4]
         joints = ikin(np.array([x, y, z, phi]))
-        self.cmd_queue.enqueue(1, (joints[0], joints[1], joints[2], joints[3], joints[4]))
+
+        self.cmd_queue.enqueue(JointMove(joints[3], joints[1], joints[4]))
 
     def tip_tip_callback_method(self, data):
         '''
@@ -203,7 +209,7 @@ class Moveto:
         phi = data.position[3]
         grip = data.position[4]
 
-        self.cmd_queue.enqueue(2, (x, y, z, phi, grip))
+        self.cmd_queue.enqueue(TipMove(x, y, z))
 
     def path_callback_method(self, data):
         '''
@@ -243,9 +249,12 @@ class Moveto:
 
             # Get the movement commands.
             all_cmds = self.cmd_queue.get_commands(self.t)
-            pos_cmds = [p for (p, _, _, _) in all_cmds]
-            vel_cmds = [v for (_, v, _, _) in all_cmds]
-            tor_cmds = [t for (_, _, t, _) in all_cmds]
+            (pos_cmds, vel_cmds, tor_cmds) = all_cmds
+
+            # Mangle the motors into the order that the feedback topic uses.
+            pos_cmds = motors_linear_to_mangled(pos_cmds)
+            vel_cmds = motors_linear_to_mangled(vel_cmds)
+            tor_cmds = motors_linear_to_mangled(tor_cmds)
 
             # Build the command message.
             self.command_msg.header.stamp = servotime

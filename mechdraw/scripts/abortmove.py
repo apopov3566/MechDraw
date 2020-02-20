@@ -6,7 +6,7 @@ from kinematics import ikin, fkin
 
 class AbortMove:
     def __init__(self, speeds=[0.1,0.1,0.1], safepos=[0.5, 0, 0.4]):
-        self.xf = [x, y, z]
+        self.xf = safepos # [x, y, z]
         self.vsplines = [CubicSpline(), CubicSpline(), CubicSpline()]
         self.hsplines = [CubicSpline(), CubicSpline(), CubicSpline()]
         self.speeds = speeds
@@ -14,7 +14,7 @@ class AbortMove:
         
         
     def setup(self, x0j, v0j, t0):
-        x0 = fkin(x0j)
+        x0 = list(fkin(x0j))
         v0 = [0.0] * len(x0) # TODO: velocity fkin
         
         xi = x0
@@ -31,7 +31,7 @@ class AbortMove:
             
         for i in range(len(self.hsplines)):
             self.hsplines[i].set_avgspeed(self.speeds[i])
-            self.hsplines[i].calc_tmove(xi[i], self.xi[i])
+            self.hsplines[i].calc_tmove(xi[i], self.xf[i])
         maxtimeh = max([spline.get_tmove() for spline in self.hsplines])
         for i in range(len(self.hsplines)):
             self.hsplines[i].set_tmove(maxtimeh)
@@ -47,13 +47,13 @@ class AbortMove:
         dones = [False] * 3
         
         if (False in [c[3] for c in vcommands]): #doing vmove
-            for i in range(len(commands)):
+            for i in range(len(vcommands)):
                 xc[i], vc[i], qc[i], dones[i] = vcommands[i]
             
         else: # doing hmove
-            for i in range(len(commands)):
+            for i in range(len(hcommands)):
                 xc[i], vc[i], qc[i], dones[i] = hcommands[i]
-                if not (False in self.dones):
+                if not (False in dones):
                     self.done = True
             
         xcj = ikin(xc)

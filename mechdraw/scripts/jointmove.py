@@ -37,11 +37,12 @@ class JointMove:
         self.done = all(done for (_, _, _, done) in raw_cmds)
 
         # Rearange the commands.
-        cmds = [p for (p, _, _, _) in raw_cmds,
-                v for (_, v, _, _) in raw_cmds,
-                e for (_, _, e, _) in raw_cmds]
 
-        return cmds
+        pos = [p for (p, _, _, _) in raw_cmds]
+        vel = [v for (_, v, _, _) in raw_cmds]
+        tor = [e for (_, _, e, _) in raw_cmds]
+
+        return [pos, vel, tor]
 
 
     def is_done(self):

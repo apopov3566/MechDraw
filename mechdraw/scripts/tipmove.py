@@ -36,7 +36,7 @@ class TipMove:
         for i in range(len(commands)):
             xc[i], vc[i], qc[i], dones[i] = commands[i]
         
-        if not (False in self.dones):
+        if not (False in dones):
             self.done = True
             
         xcj = ikin(xc)
