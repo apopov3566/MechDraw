@@ -5,7 +5,7 @@ from cubicspline import CubicSpline
 from kinematics import ikin, fkin
 
 class TipMove:
-    def __init__(self, x, y, z, speeds=[0.1,0.1,0.1,0.5]):
+    def __init__(self, x, y, z, speeds=[0.1,0.1,0.1]):
         self.xf = [x, y, z]
         self.splines = [CubicSpline(), CubicSpline(), CubicSpline()]
         self.speeds = speeds
