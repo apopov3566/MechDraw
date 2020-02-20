@@ -17,177 +17,116 @@ import time
 from collections import namedtuple, deque
 
 from cubicspline import CubicSpline
-from pathhandler import PathHandler
-from kinematics import ikin, fkin, fkin_twist
+from kinematics import ikin, fkin
 from sensor_msgs.msg import JointState
-from hw6code.msg import Goal, Point, Path
-from hw6code.srv import Abort, AbortResponse
+from mechdraw.msg import Goal, Point, Path
+from mechdraw.srv import Abort, AbortResponse
+from tipmove import TipMove
+from jointmove import JointMove
+from abortmove import AbortMove
+from grabmove import GrabMove
 
 class CmdQueue:
-    def __init__(self, cmdpos):
+    def __init__(self, cmdpos, cmdvel=[0.0, 0.0, 0.0, 0.0, 0.0]):
         self.q = deque()
-        self.splines = [CubicSpline(), CubicSpline(), CubicSpline(), \
-                        CubicSpline(), CubicSpline()]
-        self.pathhandler = PathHandler()
-        self.cmdvel = [0.0] * 5
         self.cmdpos = cmdpos
-        self.setup_new_splines = False
-
-        self.CmdData = namedtuple("CmdData", "mode data")
-
-        self.abort = False
-        self.setup_abort_splines = False
-
-        # The desired average speeds of each motor in each message mode. These
-        # are used when computing spline speeds. The motor order of each row is
-        # consistent with the motor order given in cmd_message.name in the
-        # Moveto class.
-        self.avgspeeds = [[0.2, 0.4, 0.2, 0.2, 0.2],
-                          [0.2, 0.2, 0.2, 0.2, 0.2],
-                          [0.1, 0.1, 0.1, 1.0, 1.0]]
-
-        self.safe_position = [0, 0, 0, 0, 0]
-
+        self.cmdvel = cmdvel
+        self.setup_front = False  # The move at queue head was already setup.
+        self.aborting = False
 
         assert(len(self.cmdpos) == len(self.cmdvel))
 
-        # Before commands are enqueued, try to maintain current position.
-        print("started at location", cmdpos)
-        c1 = cmdpos[0]
-        c2 = cmdpos[1]
-        c3 = cmdpos[2]
-        c4 = cmdpos[3]
-        c5 = cmdpos[4]
-        self.enqueue(0, (c1, c2, c3, c4, c5))
-        print(self.q)
 
-    def enqueue(self, mode, data):
+    def enqueue(self, move):
         '''
-        Enqueue a goal position to the given coordinates.
-        mode (int) : 0 -> move to joint position
-                     1 -> move to tip position, through joint space
-                     2 -> move to tip position, through tip space
+        Enqueue a movement to perform.
+
+        move (move instance) : The move to perform. This should be an instance
+                               of a class that has a get_commands() function
+                               which returns positions, velocites, and efforts
+                               for the motors.
         '''
 
-        self.q.append(self.CmdData(mode, data))
+        if not self.q:
+            # The queue is empty.
+            move.setup()
+
+        # Append on the left becuase pop() pops from the right.
+        self.q.appendleft(move)
+
+
+    def abort(self):
+        '''
+        Abort the current movement. When the abort move is finished, move to
+        the last non-aborted position and then continue the interrupted
+        movement.
+        '''
+
+        # Add the return movement to the front of the queue.
+        p1 = self.cmdpos[0]
+        p2 = self.cmdpos[1]
+        p3 = self.cmdpos[2]
+        self.q.append(JointMove(p1, p2, p3))
+
+        # Add the abort movement to the front of the queue.
+        self.setup_front = False
+        self.q.append(AbortMove())
+        
 
     def get_commands(self, time):
         '''
-        Give motor commands based on the front command in the queue. If time
-        is past the time of the front command and there are more commands in
-        the queue, the front command will be dequeued; otherwise, the front
-        command will stay at the front so it can finish its spline movement.
+        Determine the commands for the motors to perform the next movement. If
+        there are no more movements to perform, command the robot to hold its
+        position.
 
-        time (float) : seconds since startup
+        time (float) : time in seconds
+
         '''
 
+        # Check if there is a pending movement.
+        if self.q:
+            movement = self.d[-1]
 
-        motor_cmds = None
-        command = self.q[-1]
+            # Make sure this movement has been setup.
+            if not self.setup_front:
+                movement.setup(self.cmdpos, self.cmdvel, time)
+                self.setup_front = True
 
-        if not self.abort:
-            if command.mode == 0 or command.mode == 1:
-                # Goal positions are joint goals.
-                # Check if we have to setup new splines.
-                if not self.setup_new_splines:
-                    coords = list(command.data)
-                    for i in range(len(self.splines)):
-                        self.splines[i].set_avgspeed(self.avgspeeds[command.mode][i])
-                        self.splines[i].calc_tmove(coords[i], self.cmdpos[i])
-                        self.splines[i].update(coords[i], self.cmdpos[i], \
-                                               self.cmdvel[i], time);
+            motor_cmds = movement.get_commands(time)
 
-                    self.setup_new_splines = True
+            # If the movement has finished and we are not aborting, we should
+            # pop this movement, so we can perform the next one.
+            if movement.is_done() and not self.aborting:
+                self.q.pop()
 
-                # Now just get the commands from the splines.
-                motor_cmds = [spline.get_commands(time) for spline in self.splines]
-            elif command.mode == 2:
-                # Goal positions are tip coords; move through tip space.
-                if not self.setup_new_splines:
-                    coords = list(command.data)
-                    x, y, z, phi, th = fkin_twist([self.cmdpos[3],self.cmdpos[1],self.cmdpos[4],self.cmdpos[0]])
-                    currpos = (x, y, z, self.cmdpos[0], self.cmdpos[2])
-                    for i in range(len(self.splines)):
-                        self.splines[i].set_avgspeed(self.avgspeeds[command.mode][i])
-                        self.splines[i].calc_tmove(currpos[i], coords[i])
+                # Setup the next movement.
+                if self.q:
+                    self.q[-1].setup(self.cmdpos, self.cmdvel, time)
+                else:
+                    # The queue is empty, but when a new movement is added, we
+                    # have to set it up.
+                    self.setup_front = False
+        else:
+            motor_cmds = [self.cmdpos, [0.0] * 5, [0.0] * 5]
 
-                    maxtime = max([spline.get_tmove() for spline in self.splines])
-                    for i in range(len(self.splines)):
-                        self.splines[i].set_tmove(maxtime)
-                        self.splines[i].update(coords[i], currpos[i], \
-                                               0, time);
-
-
-                    self.setup_new_splines = True
-
-                # Now just get the commands from the splines.
-                position = [spline.get_commands(time) for spline in self.splines]
-
-                pos = [0.0] * 5
-                vel = [0.0] * 5
-                tor = [0.0] * 5
-                pos[3], pos[1], pos[4], pos[0] = ikin(np.array([position[0][0], position[1][0], position[2][0], position[3][0]]))
-
-                motor_cmds = []
-                for i in range(5):
-                    motor_cmds.append([pos[i],vel[i],tor[i],position[i][3]])
-
-                motor_cmds[0] = position[3]
-                motor_cmds[2] = position[4]
-
-            elif command.mode == 3:
-                if not self.setup_new_splines:
-                    path = list(command.data)
-                    self.pathhandler.update(path, time)
-                    self.setup_new_splines = True
-
-
-                target, done = self.pathhandler.get_commands(time)
-                pos = list(ikin(np.array(target.x, target.y, target.z, target.phi)))
-                vel = [0.0] * 5
-                tor = [0.0] * 5
-                motor_cmds = []
-                for i in range(5):
-                    motor_cmds.append([pos[i],vel[i],tor[i],done])
-
-                #motor_cmds[2] = [target.grip, 0, 0, False]
+        # Remember the returned commands for use next iterations.
+        if isinstance(movement, GripMove):
+            self.cmdpos[4] = motor_cmds[0]
+            self.cmdvel[4] = motor_cmds[1]
 
         else:
-            if not self.setup_abort_splines:
-                self.q.appendleft(self.CmdData(0, self.cmdpos))
-                for i in range(len(self.splines)):
-                    self.splines[i].set_avgspeed(0.1)
-                    self.splines[i].calc_tmove(self.safe_position[i], self.cmdpos[i])
-                    self.splines[i].update(self.safe_position[i], self.cmdpos[i], \
-                                           self.cmdvel[i], time);
+            self.cmdpos[0] = motor_cmds[0][0]
+            self.cmdpos[1] = motor_cmds[0][1]
+            self.cmdpos[2] = motor_cmds[0][2]
+            self.cmdpos[3] = motor_cmds[0][2]
 
-                self.setup_abort_splines = True
-            motor_cmds = [spline.get_commands(time) for spline in self.splines]
+            self.cmdvel[0] = motor_cmds[1][0]
+            self.cmdvel[1] = motor_cmds[1][1]
+            self.cmdvel[2] = motor_cmds[1][2]
+            self.cmdvel[3] = motor_cmds[1][2]
 
-        # Check if we should dequeue this command.
-        if len(self.q) > 1:
-            # There is another command waiting to be run.
-            done = True
-            for (_, _, _, finished) in motor_cmds:
-                if not finished:
-                    done = False
-            if done:
-                if not self.setup_abort_splines:
-                    # All splines for this command finished.
-                    self.q.pop()
-                    self.setup_new_splines = False
-                elif not self.abort:
-                    self.setup_abort_splines = False
 
-        position = []
-        velocity = []
-        for i in range(len(motor_cmds)):
-            position.append(motor_cmds[i][0])
-            velocity.append(motor_cmds[i][1])
-        self.cmdpos = tuple(position)
-        self.cmdvel = tuple(velocity)
-
-        return motor_cmds
+        return [self.cmdpos, self.cmdvel, [0.0] * 5]
 
 
 class Moveto:
@@ -284,7 +223,8 @@ class Moveto:
         id = rospy.get_caller_id()
         rospy.loginfo(id + ' received abort message: ' + str(data))
 
-        self.cmd_queue.abort = data.abort
+        self.cmd_queue.aborting = data.abort
+        self.cmd_queue.abort()
 
     def send_commands(self):
         # Setup subscribers for each goal message type.
