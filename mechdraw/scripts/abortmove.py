@@ -17,7 +17,7 @@ class AbortMove:
         x0 = list(fkin(x0j))
         v0 = [0.0] * len(x0) # TODO: velocity fkin
         
-        xi = x0
+        xi = x0[:]
         xi[2] = 0.4
         vi = [0.0] * len(xi)
         

@@ -161,7 +161,7 @@ class Moveto:
         # Keep track of time of last command.
         self.cmd_time = 0.0
 
-        self.cmd_queue = CmdQueue(self.cmdpos)
+        self.cmd_queue = CmdQueue(motors_mangled_to_linear(self.cmdpos))
 
         rospy.loginfo("Setup servo with dt %f" % self.servo.sleep_dur.to_sec())
 

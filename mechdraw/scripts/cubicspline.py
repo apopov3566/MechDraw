@@ -2,7 +2,7 @@ import math
 import rospy
 
 class CubicSpline:
-    def __init__(self, avgspeed=0.2, mintime=0.001):
+    def __init__(self, avgspeed=0.2, mintime=0.1):
         # Define all class variables so they are all in one spot.
         self.AVGSPEED = avgspeed
         self.MINTIME = mintime
