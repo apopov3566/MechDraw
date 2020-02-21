@@ -41,8 +41,8 @@ from tunecode.srv    import TuneCfg, TuneCfgResponse
 #
 #   Robot Definition
 #
-family = 'Dwarfs'
-names  = ['Doc', 'Sleepy', 'Grumpy']
+family = 'Red'
+names  = ['3', '5', '4', '7', '6']
 
 dofs      = len(names)
 fullnames = [family+'/'+name for name in names]
@@ -54,7 +54,7 @@ fullnames = [family+'/'+name for name in names]
 #   in a class, but it's the only thing in this file.
 #
 # General parameters
-joint     = 0                           # Joint number
+joint     = 4                           # Joint number
 amplitude = 0.1                         # Positive amplitude
 period    = 2.0                         # Positive period
 

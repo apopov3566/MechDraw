@@ -14,8 +14,8 @@ from gravity    import *
 #
 #   Robot Definition
 #
-family = 'Dwarfs'
-names  = ['Doc', 'Sleepy', 'Grumpy']
+family = 'Red'
+names  = ['3', '5', '4', '7', '6']
 
 fullnames = [family+'/'+name for name in names]
 
@@ -27,11 +27,11 @@ if __name__ == "__main__":
     # Initialize the basic ROS node.
     rospy.init_node('triangle')
 
-    # Do some ping-ing.  For some teams (going through the switch?)
-    # actuators aren't visible with a ping?  These are my addresses.
-    ping('10.10.10.90')
-    ping('10.10.10.91')
-    ping('10.10.10.92')
+    # # Do some ping-ing.  For some teams (going through the switch?)
+    # # actuators aren't visible with a ping?  These are my addresses.
+    # ping('10.10.10.90')
+    # ping('10.10.10.91')
+    # ping('10.10.10.92')
 
     # Assert the HEBI node is running.
     hebi_assert_node()
@@ -70,7 +70,7 @@ if __name__ == "__main__":
     blocking_rampeffort(pub, cmdmsg, gravity(cmdmsg.position))
 
     # Then move from the current (initial) to the nominal.
-    blocking_moveto(pub, cmdmsg, [0.4, -0*math.pi/2, 0*math.pi/2], gravity)
+    # blocking_moveto(pub, cmdmsg, [0.4, -0*math.pi/2, 0*math.pi/2], gravity)
 
     # Finally (continually) output the triangle wave.
-    blocking_trianglewave(pub, cmdmsg, 1, 0.1, 2.0, gravity)
+    blocking_trianglewave(pub, cmdmsg, 0, 0.1, 2.0, gravity)

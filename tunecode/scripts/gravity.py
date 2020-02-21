@@ -12,14 +12,11 @@ import math
 def gravity(pos):
     # Set the torque offsets - these should really be cleared by
     # reseting the actuator force sensors...
-    off0 = 0.0
-    off1 = 0.0
-    off2 = 0.15
+    off = [0.0] * 5
 
     # Compute from the tip inward
-    grav2 =   0.2 * math.cos(pos[2]-pos[1])
-    grav1 = - 1.7 * math.cos(pos[1]) - grav2
-    grav0 = 0.0
+    grav = [0.0] * 5
+    grav[4] = -3.7 * math.cos(pos[4])
 
     # Return the gravity vector
-    return [grav0+off0, grav1+off1, grav2+off2]
+    return [g + o for (g, o) in zip(grav, off)]
