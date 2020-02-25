@@ -19,25 +19,27 @@ from collections import namedtuple, deque
 from cubicspline import CubicSpline
 from kinematics import ikin, fkin
 from sensor_msgs.msg import JointState
-from mechdraw.msg import Goal, Point, Path
+from mechdraw.msg import Goal, Point, Path, Grab, Selector
 from mechdraw.srv import Abort, AbortResponse
 from tipmove import TipMove
 from jointmove import JointMove
 from abortmove import AbortMove
 from grabmove import GrabMove
+from markermove import MarkerMove
+from pathmove import PathMove
 
 def motors_linear_to_mangled(motors):
-    # Linear order is:  7, 5, 6, 3, 4
-    # Mangled order is: 3, 5, 4, 7, 6
-    return [motors[3], motors[1], motors[4], motors[0], motors[2]]
+    # Linear order is:  7, 5, 6, 3, 4, 2
+    # Mangled order is: 3, 2, 5, 4, 7, 6
+    return [motors[3], motors[5], motors[1], motors[4], motors[0], motors[2]]
 
 def motors_mangled_to_linear(motors):
-    # Linear order is:  7, 5, 6, 3, 4
-    # Mangled order is: 3, 5, 4, 7, 6
-    return [motors[3], motors[1], motors[4], motors[0], motors[2]]
+    # Linear order is:  7, 5, 6, 3, 4, 2
+    # Mangled order is: 3, 2, 5, 4, 7, 6
+    return [motors[4], motors[2], motors[5], motors[0], motors[3], motors[1]]
 
 class CmdQueue:
-    def __init__(self, cmdpos, cmdvel=[0.0, 0.0, 0.0, 0.0, 0.0]):
+    def __init__(self, cmdpos, cmdvel=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]):
         self.q = deque()
         self.cmdpos = list(cmdpos)
         self.cmdvel = cmdvel
@@ -104,7 +106,11 @@ class CmdQueue:
             if isinstance(movement, GrabMove):
                 self.cmdpos[4] = motor_cmds[0]
                 self.cmdvel[4] = motor_cmds[1]
-    
+            
+            elif isinstance(movement, MarkerMove):             
+                self.cmdpos[5] = motor_cmds[0]
+                self.cmdvel[5] = motor_cmds[1]
+
             else:
                 self.cmdpos[0] = motor_cmds[0][0]
                 self.cmdpos[1] = motor_cmds[0][1]
@@ -129,9 +135,9 @@ class CmdQueue:
                     # have to set it up.
                     self.setup_front = False
         else:
-            motor_cmds = [self.cmdpos, [0.0] * 5, [0.0] * 5]
+            motor_cmds = [self.cmdpos, [0.0] * 6, [0.0] * 6]
 
-        return [self.cmdpos, self.cmdvel, [0.0] * 5]
+        return [self.cmdpos, self.cmdvel, [0.0] * 6]
 
 
 class Moveto:
@@ -144,7 +150,7 @@ class Moveto:
                                    JointState, queue_size=10)
 
         self.command_msg = JointState()
-        self.command_msg.name = ['Red/3', 'Red/5', 'Red/4', 'Red/7', 'Red/6']
+        self.command_msg.name = ['Red/3', 'Red/2', 'Red/5', 'Red/4', 'Red/7', 'Red/6']
 
         # Create a servo loop at 100Hz.
         self.servo = rospy.Rate(100)
@@ -156,7 +162,7 @@ class Moveto:
 
         # Keep track of the previous motor commands.
         self.cmdpos = self.goals
-        self.cmdvel = [0.0] * 5  # We should be starting with 0 velocity.
+        self.cmdvel = [0.0] * 6  # We should be starting with 0 velocity.
 
         # Keep track of time of last command.
         self.cmd_time = 0.0
@@ -175,25 +181,8 @@ class Moveto:
         c1 = data.position[0]
         c2 = data.position[1]
         c3 = data.position[2]
-        c4 = data.position[3]
-        c5 = data.position[4]
-        self.cmd_queue.enqueue(0, (c1, c2, c3, c4, c5))
 
-    def tip_joint_callback_method(self, data):
-        '''
-        Update the goal to move the tip through joint space to a goal location.
-        '''
-        id = rospy.get_caller_id()
-        rospy.loginfo(id + ' received tip-joint message: ' + str(data))
-
-        x = data.position[0]
-        y = data.position[1]
-        z = data.position[2]
-        phi = data.position[3]
-        grip = data.position[4]
-        joints = ikin(np.array([x, y, z, phi]))
-
-        self.cmd_queue.enqueue(JointMove(joints[3], joints[1], joints[4]))
+        self.cmd_queue.enqueue(JointMove(c1, c2, c3))
 
     def tip_tip_callback_method(self, data):
         '''
@@ -206,8 +195,6 @@ class Moveto:
         x = data.position[0]
         y = data.position[1]
         z = data.position[2]
-        phi = data.position[3]
-        grip = data.position[4]
 
         self.cmd_queue.enqueue(TipMove(x, y, z))
 
@@ -219,7 +206,7 @@ class Moveto:
         id = rospy.get_caller_id()
         rospy.loginfo(id + ' received path message: ' + str(data))
 
-        self.cmd_queue.enqueue(3, data.path)
+        #self.cmd_queue.enqueue(3, data.path)
 
     def abort_callback_method(self, data):
         '''
@@ -229,14 +216,37 @@ class Moveto:
         id = rospy.get_caller_id()
         rospy.loginfo(id + ' received abort message: ' + str(data))
 
-        self.cmd_queue.aborting = data.abort
-        self.cmd_queue.abort()
+        if self.cmd_queue.aborting != data.abort:
+            self.cmd_queue.aborting = data.abort
+            if data.abort:
+                self.cmd_queue.abort()
 
+    def grab_callback_method(self, data):
+        '''
+        Update the goal to move the tip through tip space to a goal location.
+        '''
+
+        id = rospy.get_caller_id()
+        rospy.loginfo(id + ' received path message: ' + str(data))
+
+        self.cmd_queue.enqueue(GrabMove(data.grab))
+
+    def marker_callback_method(self, data):
+        '''
+        Update the goal to move the tip through tip space to a goal location.
+        '''     
+
+        id = rospy.get_caller_id()
+        rospy.loginfo(id + ' received path message: ' + str(data))
+
+        self.cmd_queue.enqueue(MarkerMove(data.marker))
+    
     def send_commands(self):
         # Setup subscribers for each goal message type.
-        rospy.Subscriber('goal/joint-joint', Goal, joint_joint_callback)
-        rospy.Subscriber('goal/tip-joint', Goal, tip_joint_callback)
-        rospy.Subscriber('goal/tip-tip', Goal, tip_tip_callback)
+        rospy.Subscriber('goal/joint_joint', Goal, joint_joint_callback)
+        rospy.Subscriber('goal/tip_tip', Goal, tip_tip_callback)
+        rospy.Subscriber('goal/grab', Grab, grab_callback)
+        rospy.Subscriber('goal/marker', Selector, marker_callback)
         rospy.Subscriber('goal/path', Path, path_callback)
 
         rospy.Service('abort', Abort, abort_callback)
@@ -261,7 +271,7 @@ class Moveto:
             self.command_msg.position = pos_cmds
             self.command_msg.velocity = vel_cmds
             self.command_msg.effort = tor_cmds
-            self.command_msg.effort[4] = -3.5 * np.cos(pos_cmds[4])
+            self.command_msg.effort[5] = -3.7 * np.cos(pos_cmds[5])
 
             # Send the motor commands.
             self.pub.publish(self.command_msg)
@@ -295,14 +305,17 @@ m = Moveto()
 def joint_joint_callback(data):
     m.joint_joint_callback_method(data)
 
-def tip_joint_callback(data):
-    m.tip_joint_callback_method(data)
-
 def tip_tip_callback(data):
     m.tip_tip_callback_method(data)
 
 def path_callback(data):
     m.path_callback_method(data)
+
+def grab_callback(data):
+    m.grab_callback_method(data)
+
+def marker_callback(data):
+    m.marker_callback_method(data)
 
 def abort_callback(data):
     m.abort_callback_method(data)

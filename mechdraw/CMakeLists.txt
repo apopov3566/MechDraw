@@ -58,6 +58,8 @@ add_message_files(
    Goal.msg
    Point.msg
    Path.msg
+   Grab.msg
+   Selector.msg
 )
 
 ## Generate services in the 'srv' folder
