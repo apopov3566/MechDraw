@@ -43,7 +43,7 @@ class Detect:
                 detection = self.inverse_transform(detection)
                 message = SingleGesture()
                 message.xcenter = detection.x
-                message.ycenter = detection.x
+                message.ycenter = detection.y
                 message.width = detection.w
                 message.height = detection.h
                 message.id = detection.det_class
@@ -51,8 +51,8 @@ class Detect:
                 
                 self.detect_msg.gestures.append(message)
             
-        if len(self.detect_msg.gestures) > 0:
-            self.detect_pub.publish(self.detect_msg)
+        #if len(self.detect_msg.gestures) > 0:
+        self.detect_pub.publish(self.detect_msg)
             
         
     def start_detection(self):
