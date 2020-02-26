@@ -14,7 +14,7 @@ import sys
 import rospy
 import Queue
 import time
-from collections import namedtuple, deque
+from collections import deque
 
 from cubicspline import CubicSpline
 from kinematics import ikin, fkin
