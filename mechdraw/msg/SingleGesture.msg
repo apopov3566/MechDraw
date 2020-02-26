@@ -1,4 +1,4 @@
-int32 class
+string id
 float64 xcenter
 float64 ycenter
 float64 width
