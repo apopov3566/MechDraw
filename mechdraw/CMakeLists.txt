@@ -60,6 +60,8 @@ add_message_files(
    Path.msg
    Grab.msg
    Selector.msg
+   SingleGesture.msg
+   GestureArray.msg
 )
 
 ## Generate services in the 'srv' folder
