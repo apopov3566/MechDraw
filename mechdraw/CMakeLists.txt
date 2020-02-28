@@ -62,6 +62,8 @@ add_message_files(
    Selector.msg
    SingleGesture.msg
    GestureArray.msg
+   SingleCalibration.msg
+   CalibrationArray.msg
 )
 
 ## Generate services in the 'srv' folder
